@@ -100,6 +100,9 @@ class SentimentNet(nn.Module):
         hidden = (weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device), weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device))
         return hidden
 
+word2idx = pickle.load(open(f'word2idx.pkl', 'rb'))
+idx2word = pickle.load(open(f'idx2word.pkl', 'rb'))
+
 vocab_size = len(word2idx) + 1
 output_size = 1
 embedding_dim = 100
