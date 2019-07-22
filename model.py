@@ -78,8 +78,9 @@ class SentimentNet(nn.Module):
         words_found = 0
 
         for i, word in enumerate(target_vocab):
-            try: 
-                weights_matrix[i] = glove[word]
+            try:
+                if word in aspect_term_list: 
+                    weights_matrix[i] = glove[word] * (1 - aspect_weights[aspect_term_mapping[word]])
                 words_found += 1
             except KeyError:
                 weights_matrix[i] = np.random.normal(scale=0.6, size=(embedding_dim, ))

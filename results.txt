@@ -1,0 +1,21 @@
+Unweighted LSTM:
+=====================
+output_size = 1
+embedding_dim = 100
+hidden_dim = 512
+n_layers = 2
+
+Test loss: 0.419
+Test accuracy: 80.775%
+
+___________________________
+
+Weighted LSTM (Weights added in embedding layer):
+=====================
+output_size = 1
+embedding_dim = 100
+hidden_dim = 512
+n_layers = 2
+
+Test loss: 0.490
+Test accuracy: 80.775%
