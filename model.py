@@ -36,7 +36,7 @@ else:
 def create_emb_layer(weights_matrix, non_trainable=False):
     # num_embeddings, embedding_dim = weights_matrix.size()
     num_embeddings, embedding_dim = weights_matrix.shape
-    print(num_embeddings, " ", embedding_dim)
+    # print(num_embeddings, " ", embedding_dim)
     emb_layer = nn.Embedding(num_embeddings, embedding_dim)
     emb_layer.weight.data.copy_(torch.from_numpy(weights_matrix))
     # emb_layer.load_state_dict({'weight': weights_matrix})
@@ -46,6 +46,18 @@ def create_emb_layer(weights_matrix, non_trainable=False):
     # return emb_layer, num_embeddings, embedding_dim
     return emb_layer, embedding_dim
 
+def softmax(l):
+    return np.exp(l)/np.sum(np.exp(l)) 
+
+# For Weighted Word Embeddings 
+with open("aspect_term_list.pkl", "rb") as f:
+    aspect_term_list = pickle.load(f)
+
+with open("aspect_weights.pkl", "rb") as f:
+    aspect_weights = pickle.load(f)
+
+with open("aspect_term_mapping.pkl", "rb") as f:
+    aspect_term_mapping = pickle.load(f)
 
 class SentimentNet(nn.Module):
 
@@ -120,7 +132,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
 epochs = 2
 counter = 0
-print_every = 1000
+print_every = 10
 clip = 5
 valid_loss_min = np.Inf
 
@@ -131,6 +143,7 @@ for i in range(epochs):
     
     for inputs, labels in train_loader:
         counter += 1
+        # print(counter)
         h = tuple([e.data for e in h])
         inputs, labels = inputs.to(device), labels.to(device)
         model.zero_grad()

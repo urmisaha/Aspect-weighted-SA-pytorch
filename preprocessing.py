@@ -23,13 +23,13 @@ import pickle
 
 dataframe = pandas.read_csv("merge_train.csv", header=None, names=['sentence', 'sentiment'])
 dataset = dataframe.values
-train_sentences = dataset[0:,0]
-train_labels = dataset[0:,1].astype(int)
+train_sentences = dataset[0:67600,0]
+train_labels = dataset[0:67600,1].astype(int)
 
 dataframe = pandas.read_csv("merge_test.csv", header=None, names=['sentence', 'sentiment'])
 dataset = dataframe.values
-test_sentences = dataset[0:,0]
-test_labels = dataset[0:,1].astype(int)
+test_sentences = dataset[0:16000,0]
+test_labels = dataset[0:16000,1].astype(int)
 
 print("Data load completed..")
 
