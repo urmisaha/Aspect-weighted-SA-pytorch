@@ -183,6 +183,7 @@ test_losses = []
 num_correct = 0
 h = model.init_hidden(batch_size)
 
+print("Printing output:: ")
 model.eval()
 for inputs, labels in test_loader:
     h = tuple([each.data for each in h])
@@ -191,6 +192,7 @@ for inputs, labels in test_loader:
     test_loss = criterion(output.squeeze(), labels.float())
     test_losses.append(test_loss.item())
     pred = torch.round(output.squeeze())  # Rounds the output to 0/1
+    print(pred)
     correct_tensor = pred.eq(labels.float().view_as(pred))
     correct = np.squeeze(correct_tensor.cpu().numpy())
     num_correct += np.sum(correct)
