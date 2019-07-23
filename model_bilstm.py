@@ -6,6 +6,9 @@ import bcolz
 import pickle
 import numpy as np
 
+torch.set_printoptions(edgeitems=10)
+# torch.set_printoptions(profile="full")
+
 train_sentences = pickle.load(open(f'train_sentences.pkl', 'rb'))
 val_sentences = pickle.load(open(f'val_sentences.pkl', 'rb'))
 test_sentences = pickle.load(open(f'test_sentences.pkl', 'rb'))
@@ -19,9 +22,9 @@ test_data = TensorDataset(torch.from_numpy(test_sentences), torch.from_numpy(tes
 
 batch_size = 400
 
-train_loader = DataLoader(train_data, shuffle=True, batch_size=batch_size)
-val_loader = DataLoader(val_data, shuffle=True, batch_size=batch_size)
-test_loader = DataLoader(test_data, shuffle=True, batch_size=batch_size)
+train_loader = DataLoader(train_data, shuffle=False, batch_size=batch_size)
+val_loader = DataLoader(val_data, shuffle=False, batch_size=batch_size)
+test_loader = DataLoader(test_data, shuffle=False, batch_size=batch_size)
 
 # torch.cuda.is_available() checks and returns a Boolean True if a GPU is available, else it'll return False
 is_cuda = torch.cuda.is_available()
@@ -36,6 +39,7 @@ else:
 def create_emb_layer(weights_matrix, non_trainable=False):
     # num_embeddings, embedding_dim = weights_matrix.size()
     num_embeddings, embedding_dim = weights_matrix.shape
+    # emb_layer = nn.Embedding.from_pretrained(weights_matrix)
     emb_layer = nn.Embedding(num_embeddings, embedding_dim)
     emb_layer.weight.data.copy_(torch.from_numpy(weights_matrix))
     # emb_layer.load_state_dict({'weight': weights_matrix})
@@ -58,6 +62,7 @@ with open("aspect_weights.pkl", "rb") as f:
 with open("aspect_term_mapping.pkl", "rb") as f:
     aspect_term_mapping = pickle.load(f)
 
+
 # Bidirectional recurrent neural network (many-to-one)
 class BiRNN(nn.Module):
 
@@ -74,6 +79,8 @@ class BiRNN(nn.Module):
 
         glove = {w: vectors[word2idx[w]-1] for w in words}
 
+        self.glove = glove
+
         matrix_len = len(target_vocab)
         weights_matrix = np.zeros((matrix_len, 100))
         words_found = 0
@@ -86,14 +93,32 @@ class BiRNN(nn.Module):
             except KeyError:
                 weights_matrix[i] = np.random.normal(scale=0.6, size=(embedding_dim, ))
 
-        self.embedding, embedding_dim = create_emb_layer(weights_matrix, True)
+        # self.embedding, embedding_dim = create_emb_layer(weights_matrix, True)
+        self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.fc = nn.Linear(hidden_dim*2, output_size)  # 2 for bidirection
         self.sigmoid = nn.Sigmoid()
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x, hidden):
         embeds = self.embedding(x)
-             
+
+        avg_aspect_W = []
+        for s, sent in enumerate(x):
+            # s = 37
+            for i, e in enumerate(sent):
+                weights_s = []
+                if int(e) != 0 and idx2word[int(e)] in aspect_term_list:
+                    word = idx2word[int(e)]
+                    w = aspect_weights[aspect_term_mapping[word]]
+                    weights_s.append(w)
+                    embeds[s][i] *= w
+                if len(weights_s) == 0:
+                    weights_s.append(1)
+            a = np.mean(weights_s)
+            a = a*10 if a!=1 else a
+            avg_aspect_W.append([a]*1024)
+        
         # Set initial states
         h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device) # 2 for bidirection 
         c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)
@@ -101,9 +126,14 @@ class BiRNN(nn.Module):
         # Forward propagate LSTM
         lstm_out, (hidden, cell) = self.lstm(embeds, (h0, c0))  # out: tensor of shape (batch_size, seq_length, hidden_size*2)
         hidden = self.dropout(torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1))
+        
+        avg_aspect_W = torch.FloatTensor(avg_aspect_W).to(device)
+        hidden = torch.mul(hidden, avg_aspect_W)
 
         # Decode the hidden state of the last time step
         lstm_out = self.fc(hidden)
+        # lstm_out[lstm_out<0] = 0
+        # lstm_out[lstm_out>0] = 1
         lstm_out = self.sigmoid(lstm_out)
         return lstm_out
     
@@ -134,20 +164,20 @@ counter = 0
 print_every = 10
 clip = 5
 valid_loss_min = np.Inf
-
+train_loss_min = np.Inf
+print("Start training..")
 model.train()
 
 for i in range(epochs):
     h = model.init_hidden(batch_size)
-    
+
     for inputs, labels in train_loader:
         counter += 1
-        # print(counter)
         h = tuple([e.data for e in h])
         inputs, labels = inputs.to(device), labels.to(device)
         model.zero_grad()
         output = model(inputs, h)
-        loss = criterion(output.squeeze(), labels.float())
+        loss = criterion(output, labels.float())
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), clip)
         optimizer.step()
@@ -160,7 +190,7 @@ for i in range(epochs):
                 val_h = tuple([each.data for each in val_h])
                 inp, lab = inp.to(device), lab.to(device)
                 out = model(inp, val_h)
-                val_loss = criterion(out.squeeze(), lab.float())
+                val_loss = criterion(out, lab.float())
                 val_losses.append(val_loss.item())
                 
             model.train()
@@ -168,32 +198,33 @@ for i in range(epochs):
                   "Step: {}...".format(counter),
                   "Loss: {:.6f}...".format(loss.item()),
                   "Val Loss: {:.6f}".format(np.mean(val_losses)))
-            if np.mean(val_losses) <= valid_loss_min:
-                torch.save(model.state_dict(), './state_dict.pt')
+            if np.mean(val_losses) < valid_loss_min:
+                torch.save(model.state_dict(), './state_dict_val_loss_full_data.pt')
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
 
 # Loading the best model
-model.load_state_dict(torch.load('./state_dict.pt'))
+model.load_state_dict(torch.load('./state_dict_val_loss_full_data.pt'))
 
 test_losses = []
 num_correct = 0
 h = model.init_hidden(batch_size)
 
-print("Printing output:: ")
 model.eval()
 for inputs, labels in test_loader:
     h = tuple([each.data for each in h])
     inputs, labels = inputs.to(device), labels.to(device)
     output = model(inputs, h)
-    test_loss = criterion(output.squeeze(), labels.float())
+    test_loss = criterion(output, labels.float())
     test_losses.append(test_loss.item())
     pred = torch.round(output.squeeze())  # Rounds the output to 0/1
-    print(pred)
     correct_tensor = pred.eq(labels.float().view_as(pred))
     correct = np.squeeze(correct_tensor.cpu().numpy())
     num_correct += np.sum(correct)
+
+print("Printing output:: ")
+print(pred)
 
 print("Test loss: {:.3f}".format(np.mean(test_losses)))
 test_acc = num_correct/len(test_loader.dataset)

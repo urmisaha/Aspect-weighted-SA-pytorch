@@ -5,6 +5,7 @@ import nltk
 import numpy as np
 import pandas
 import pickle
+from sklearn.utils import resample
 # nltk.download('punkt')
 
 # train_file = bz2.BZ2File('train.ft.txt.bz2')
@@ -22,9 +23,22 @@ import pickle
 # test_file = [x.decode('utf-8') for x in test_file[:num_test]]
 
 dataframe = pandas.read_csv("merge_train.csv", header=None, names=['sentence', 'sentiment'])
+
+# To upsample data to have equal number of positive and negative classes
+# ======================================================================
+df_positive = dataframe[dataframe['sentiment']==1]      # 55620
+df_negative = dataframe[dataframe['sentiment']==0]      # 13253
+
+# df_positive_downsampled = resample(df_positive, replace=True, n_samples=13253)
+df_negative_upsampled = resample(df_negative, replace=True, n_samples=55620)
+dataframe = pandas.concat([df_positive, df_negative_upsampled])
+# ======================================================================
+dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
-train_sentences = dataset[0:67600,0]
-train_labels = dataset[0:67600,1].astype(int)
+# train_sentences = dataset[0:67600,0]  # without resampling  -  negative: 13253  -  positive: 55620
+train_sentences = dataset[0:111200,0] # negative data upsampled
+# train_sentences = dataset[0:26400,0]    # positive data downsampled
+train_labels = dataset[0:111200,1].astype(int)
 
 dataframe = pandas.read_csv("merge_test.csv", header=None, names=['sentence', 'sentiment'])
 dataset = dataframe.values
