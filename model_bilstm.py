@@ -98,25 +98,23 @@ class BiRNN(nn.Module):
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.fc = nn.Linear(hidden_dim*2, output_size)  # 2 for bidirection
         self.sigmoid = nn.Sigmoid()
-        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x, hidden):
         embeds = self.embedding(x)
 
         avg_aspect_W = []
         for s, sent in enumerate(x):
-            # s = 37
             for i, e in enumerate(sent):
                 weights_s = []
                 if int(e) != 0 and idx2word[int(e)] in aspect_term_list:
                     word = idx2word[int(e)]
                     w = aspect_weights[aspect_term_mapping[word]]
-                    weights_s.append(w)
+                    # Multiplying embedding layer outputs with aspect weights
                     embeds[s][i] *= w
-                if len(weights_s) == 0:
-                    weights_s.append(1)
-            a = np.mean(weights_s)
-            a = a*10 if a!=1 else a
+
+                    # Creating weight matrix to multiply with the outputs of last hidden layer
+                    weights_s.append(w)
+            a = 10*np.mean(weights_s) if len(weights_s) > 0 else 1
             avg_aspect_W.append([a]*1024)
         
         # Set initial states
@@ -127,13 +125,12 @@ class BiRNN(nn.Module):
         lstm_out, (hidden, cell) = self.lstm(embeds, (h0, c0))  # out: tensor of shape (batch_size, seq_length, hidden_size*2)
         hidden = self.dropout(torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1))
         
+        # Multiplying weights to outputs of last hidden layer
         avg_aspect_W = torch.FloatTensor(avg_aspect_W).to(device)
         hidden = torch.mul(hidden, avg_aspect_W)
 
         # Decode the hidden state of the last time step
         lstm_out = self.fc(hidden)
-        # lstm_out[lstm_out<0] = 0
-        # lstm_out[lstm_out>0] = 1
         lstm_out = self.sigmoid(lstm_out)
         return lstm_out
     
@@ -170,6 +167,11 @@ model.train()
 
 for i in range(epochs):
     h = model.init_hidden(batch_size)
+    # Checking whether batch contains a mixture of positive and negative samples
+    # for inputs, labels in train_loader:
+    #     print("labels:")
+    #     print(labels)
+    #     exit()
 
     for inputs, labels in train_loader:
         counter += 1
@@ -199,13 +201,13 @@ for i in range(epochs):
                   "Loss: {:.6f}...".format(loss.item()),
                   "Val Loss: {:.6f}".format(np.mean(val_losses)))
             if np.mean(val_losses) < valid_loss_min:
-                torch.save(model.state_dict(), './state_dict_val_loss_full_data.pt')
+                torch.save(model.state_dict(), './models/state_dict_val_loss_only_hid_pos_downsample.pt')
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
 
 # Loading the best model
-model.load_state_dict(torch.load('./state_dict_val_loss_full_data.pt'))
+model.load_state_dict(torch.load('./models/state_dict_val_loss_only_hid_pos_downsample.pt'))
 
 test_losses = []
 num_correct = 0

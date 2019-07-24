@@ -1,3 +1,4 @@
+import sys
 import bz2
 from collections import Counter
 import re
@@ -24,21 +25,46 @@ from sklearn.utils import resample
 
 dataframe = pandas.read_csv("merge_train.csv", header=None, names=['sentence', 'sentiment'])
 
-# To upsample data to have equal number of positive and negative classes
+
+# To upsample/downsample data to have equal number of positive and negative classes
 # ======================================================================
 df_positive = dataframe[dataframe['sentiment']==1]      # 55620
 df_negative = dataframe[dataframe['sentiment']==0]      # 13253
 
+if df_positive.shape[0] > df_negative.shape[0]:
+    df_majority = df_positive
+    df_minority = df_negative
+else:
+    df_majority = df_negative
+    df_minority = df_positive
+
+try:
+    sampling = sys.argv[1]                                  # takes values: no-sample | up-sample | down-sample
+except:
+    print("Error Message:\nArguement expected for sampling: no-sample | up-sample | down-sample")
+    exit()
+    
+if sampling == 'up-sample':
+    df_minority_upsampled = resample(df_minority, replace=True, n_samples=df_majority.shape[0])
+    dataframe = pandas.concat([df_majority, df_minority_upsampled])
+elif sampling == 'down-sample':
+    df_majority_downsampled = resample(df_majority, replace=True, n_samples=df_minority.shape[0])
+    dataframe = pandas.concat([df_majority_downsampled, df_minority])
+else:
+    dataframe = pandas.concat([df_majority, df_minority])
+
 # df_positive_downsampled = resample(df_positive, replace=True, n_samples=13253)
-df_negative_upsampled = resample(df_negative, replace=True, n_samples=55620)
-dataframe = pandas.concat([df_positive, df_negative_upsampled])
+# df_negative_upsampled = resample(df_negative, replace=True, n_samples=55620)
+# dataframe = pandas.concat([df_positive, df_negative])
 # ======================================================================
+
+
 dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
 # train_sentences = dataset[0:67600,0]  # without resampling  -  negative: 13253  -  positive: 55620
-train_sentences = dataset[0:111200,0] # negative data upsampled
-# train_sentences = dataset[0:26400,0]    # positive data downsampled
-train_labels = dataset[0:111200,1].astype(int)
+# train_sentences = dataset[0:111200,0] # negative data upsampled
+train_sentences = dataset[0:26400,0]    # positive data downsampled
+train_labels = dataset[0:26400,1].astype(int)
 
 dataframe = pandas.read_csv("merge_test.csv", header=None, names=['sentence', 'sentiment'])
 dataset = dataframe.values

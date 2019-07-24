@@ -1,18 +1,18 @@
-WEIGHTS MULTIPLIED ONLY TO LAST HIDDEN LAYER
------------------------------------------------------------------------------------------------------
+WEIGHTS MULTIPLIED TO BOTH EMBEDDING LAYER OUTPUT AND LAST HIDDEN LAYER OUTPUT
+-----------------------------------------------------------------------------------------------------------------
 
-NO RESAMPLING :: Weighted BiLSTM (Weights added outputs of last hidden layer):
-=====================================================================================================
+NO RESAMPLING :: Weighted BiLSTM (Weights added to outputs of both embedding layer and last hidden layer):
+=================================================================================================================
 output_size = 1
 embedding_dim = 100
 hidden_dim = 512
 n_layers = 2
 
+All predictions are 1 (possible due to imbalanced dataset: positive more than negative)
+_________________________________________________________________________________________________________________
 
-_____________________________________________________________________________________________________
 
-
-POSITIVE DOWNSAMPLED :: Weighted BiLSTM (Weights added outputs of last hidden layer):
+POSITIVE DOWNSAMPLED :: Weighted BiLSTM (Weights added to outputs of both embedding layer and last hidden layer):
 =====================================================================================================
 output_size = 1
 embedding_dim = 100
@@ -21,52 +21,96 @@ n_layers = 2
 
 Test loss: 0.621
 Test accuracy: 65.775%
-_____________________________________________________________________________________________________
+_________________________________________________________________________________________________________________
 
 
-NEGATIVE UPSAMPLED :: Weighted BiLSTM (Weights added outputs of last hidden layer):
-=====================================================================================================
+NEGATIVE UPSAMPLED :: Weighted BiLSTM (Weights added to outputs of both embedding layer and last hidden layer):
+=================================================================================================================
 output_size = 1
 embedding_dim = 100
 hidden_dim = 512
 n_layers = 2
 
+Test loss: 0.303
+Test accuracy: 86.650%
+_________________________________________________________________________________________________________________
 
-_____________________________________________________________________________________________________
 
---------------------------------------------------X--------------------------------------------------
+=================================================XXX=============================================================
 
-WEIGHTS MULTIPLIED TO BOTH EMBEDDING LAYER AND LAST HIDDEN LAYER
+
+WEIGHTS MULTIPLIED TO ONLY EMBEDDING LAYER OUTPUT
 -----------------------------------------------------------------------------------------------------
-NO RESAMPLING :: Weighted BiLSTM (Weights added outputs of last hidden layer):
-=====================================================================================================
+NO RESAMPLING :: Weighted BiLSTM (Weights added to outputs of embedding layer only):
+=================================================================================================================
 output_size = 1
 embedding_dim = 100
 hidden_dim = 512
 n_layers = 2
 
+All predictions are 1 (possible due to imbalanced dataset: positive more than negative)
+_________________________________________________________________________________________________________________
 
-_____________________________________________________________________________________________________
 
-
-POSITIVE DOWNSAMPLED :: Weighted BiLSTM (Weights added outputs of last hidden layer):
-=====================================================================================================
+POSITIVE DOWNSAMPLED :: Weighted BiLSTM (Weights added to outputs of embedding layer only):
+=================================================================================================================
 output_size = 1
 embedding_dim = 100
 hidden_dim = 512
 n_layers = 2
 
+Test loss: 0.592
+Test accuracy: 69.050%
+_________________________________________________________________________________________________________________
 
-_____________________________________________________________________________________________________
 
-
-NEGATIVE UPSAMPLED :: Weighted BiLSTM (Weights added outputs of last hidden layer):
-=====================================================================================================
+NEGATIVE UPSAMPLED :: Weighted BiLSTM (Weights added to outputs of embedding layer only):
+=================================================================================================================
 output_size = 1
 embedding_dim = 100
 hidden_dim = 512
 n_layers = 2
 
+Test loss: 0.296
+Test accuracy: 87.037%
+_________________________________________________________________________________________________________________
 
-_____________________________________________________________________________________________________
+
+=================================================XXX=============================================================
+
+
+WEIGHTS MULTIPLIED TO ONLY HIDDEN LAYER OUTPUT
+-----------------------------------------------------------------------------------------------------------------
+NO RESAMPLING :: Weighted BiLSTM (Weights added to outputs of hidden layer only):
+=================================================================================================================
+output_size = 1
+embedding_dim = 100
+hidden_dim = 512
+n_layers = 2
+
+All predictions are 1 (possible due to imbalanced dataset: positive more than negative)
+_________________________________________________________________________________________________________________
+
+
+POSITIVE DOWNSAMPLED :: Weighted BiLSTM (Weights added to outputs of hidden layer only):
+=================================================================================================================
+output_size = 1
+embedding_dim = 100
+hidden_dim = 512
+n_layers = 2
+
+All predictions are 1 (possible due to imbalanced dataset: positive more than negative)
+_________________________________________________________________________________________________________________
+
+
+NEGATIVE UPSAMPLED :: Weighted BiLSTM (Weights added to outputs of hidden layer only):
+=================================================================================================================
+output_size = 1
+embedding_dim = 100
+hidden_dim = 512
+n_layers = 2
+
+Test loss: 0.295
+Test accuracy: 87.562%
+_________________________________________________________________________________________________________________
 
