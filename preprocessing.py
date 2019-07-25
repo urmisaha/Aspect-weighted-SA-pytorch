@@ -39,7 +39,7 @@ else:
     df_minority = df_positive
 
 try:
-    sampling = sys.argv[1]                                  # takes values: no-sample | up-sample | down-sample
+    sampling = sys.argv[1]                              # takes values: no-sample | up-sample | down-sample
 except:
     print("Error Message:\nArguement expected for sampling: no-sample | up-sample | down-sample")
     exit()
@@ -53,18 +53,16 @@ elif sampling == 'down-sample':
 else:
     dataframe = pandas.concat([df_majority, df_minority])
 
-# df_positive_downsampled = resample(df_positive, replace=True, n_samples=13253)
-# df_negative_upsampled = resample(df_negative, replace=True, n_samples=55620)
-# dataframe = pandas.concat([df_positive, df_negative])
 # ======================================================================
 
-
+train_size = dataframe.shape[0]
 dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
 # train_sentences = dataset[0:67600,0]  # without resampling  -  negative: 13253  -  positive: 55620
-# train_sentences = dataset[0:111200,0] # negative data upsampled
-train_sentences = dataset[0:26400,0]    # positive data downsampled
-train_labels = dataset[0:26400,1].astype(int)
+train_sentences = dataset[0:111200,0] # negative data upsampled
+# train_sentences = dataset[0:26400,0]    # positive data downsampled
+# train_sentences = dataset[0:20000,0]    # test data
+train_labels = dataset[0:111200,1].astype(int)
 
 dataframe = pandas.read_csv("merge_test.csv", header=None, names=['sentence', 'sentiment'])
 dataset = dataframe.values
@@ -105,7 +103,7 @@ for i, sentence in enumerate(train_sentences):
         words.update([word.lower()])  # Converting all the words to lowercase
         train_sentences[i].append(word)
     if i%20000 == 0:
-        print(str((i*100)/70000) + "% done")
+        print(str((i*100)/train_size) + "% done")
 print("100% done")
 
 # Removing the words that only appear once

@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import TensorDataset, DataLoader
+from sklearn.metrics import precision_recall_fscore_support
 import torch.nn as nn
 # from preprocessing import *
 import bcolz
@@ -201,19 +202,23 @@ for i in range(epochs):
                   "Loss: {:.6f}...".format(loss.item()),
                   "Val Loss: {:.6f}".format(np.mean(val_losses)))
             if np.mean(val_losses) < valid_loss_min:
-                torch.save(model.state_dict(), './models/state_dict_val_loss_only_hid_pos_downsample.pt')
+                torch.save(model.state_dict(), 'models/state_dict_val_loss_both_neg_upsample.pt')
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
 
 # Loading the best model
-model.load_state_dict(torch.load('./models/state_dict_val_loss_only_hid_pos_downsample.pt'))
+model.load_state_dict(torch.load('models/state_dict_val_loss_both_neg_upsample.pt'))
 
 test_losses = []
 num_correct = 0
 h = model.init_hidden(batch_size)
 
 model.eval()
+
+total_labels = torch.LongTensor()
+total_preds = torch.LongTensor()
+
 for inputs, labels in test_loader:
     h = tuple([each.data for each in h])
     inputs, labels = inputs.to(device), labels.to(device)
@@ -224,10 +229,24 @@ for inputs, labels in test_loader:
     correct_tensor = pred.eq(labels.float().view_as(pred))
     correct = np.squeeze(correct_tensor.cpu().numpy())
     num_correct += np.sum(correct)
+    labels = labels.to("cpu").data.numpy()
+    pred = pred.to("cpu").data.numpy()
+    total_labels = torch.cat((total_labels, torch.LongTensor(labels)))
+    total_preds = torch.cat((total_preds, torch.LongTensor(pred)))
 
-print("Printing output:: ")
+print("Printing results::: ")
 print(pred)
+labels = total_labels.data.numpy()
+preds = total_preds.data.numpy()
 
+print("weighted precision_recall_fscore_support:")
+print(precision_recall_fscore_support(labels, preds, average='weighted'))
+print("============================================")
+
+print(precision_recall_fscore_support(labels, preds, average=None))
+print("============================================")
+    
 print("Test loss: {:.3f}".format(np.mean(test_losses)))
 test_acc = num_correct/len(test_loader.dataset)
 print("Test accuracy: {:.3f}%".format(test_acc*100))
+print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
