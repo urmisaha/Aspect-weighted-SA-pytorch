@@ -7,21 +7,6 @@ import numpy as np
 import pandas
 import pickle
 from sklearn.utils import resample
-# nltk.download('punkt')
-
-# train_file = bz2.BZ2File('train.ft.txt.bz2')
-# test_file = bz2.BZ2File('test.ft.txt.bz2')
-# print("bz2 completed..")
-
-# train_file = train_file.readlines()
-# test_file = test_file.readlines()
-# print("readlines completed..")
-
-# num_train = 800000 # We're training on the first 800,000 reviews in the dataset
-# num_test = 200000 # Using 200,000 reviews from test set
-
-# train_file = [x.decode('utf-8') for x in train_file[:num_train]]
-# test_file = [x.decode('utf-8') for x in test_file[:num_test]]
 
 dataframe = pandas.read_csv("merge_train.csv", header=None, names=['sentence', 'sentiment'])
 
@@ -58,9 +43,9 @@ else:
 train_size = dataframe.shape[0]
 dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
-# train_sentences = dataset[0:67600,0]  # without resampling  -  negative: 13253  -  positive: 55620
-train_sentences = dataset[0:111200,0] # negative data upsampled
-# train_sentences = dataset[0:26400,0]    # positive data downsampled
+# train_sentences = dataset[0:67600,0]    # without resampling  -  negative: 13253  -  positive: 55620
+train_sentences = dataset[0:111200,0]   # negative data upsampled
+#train_sentences = dataset[0:26400,0]    # positive data downsampled
 # train_sentences = dataset[0:20000,0]    # test data
 train_labels = dataset[0:111200,1].astype(int)
 
@@ -70,13 +55,6 @@ test_sentences = dataset[0:16000,0]
 test_labels = dataset[0:16000,1].astype(int)
 
 print("Data load completed..")
-
-# Extracting labels from sentences
-# train_labels = [0 if x.split(' ')[0] == '__label__1' else 1 for x in train_file]
-# train_sentences = [x.split(' ', 1)[1][:-1].lower() for x in train_file]
-
-# test_labels = [0 if x.split(' ')[0] == '__label__1' else 1 for x in test_file]
-# test_sentences = [x.split(' ', 1)[1][:-1].lower() for x in test_file]
 
 # Some simple cleaning of data
 for i in range(len(train_sentences)):
@@ -99,8 +77,8 @@ words = Counter()  # Dictionary that will map a word to the number of times it a
 for i, sentence in enumerate(train_sentences):
     # The sentences will be stored as a list of words/tokens
     train_sentences[i] = []
-    for word in nltk.word_tokenize(sentence):  # Tokenizing the words
-        words.update([word.lower()])  # Converting all the words to lowercase
+    for word in nltk.word_tokenize(sentence):   # Tokenizing the words
+        words.update([word.lower()])            # Converting all the words to lowercase
         train_sentences[i].append(word)
     if i%20000 == 0:
         print(str((i*100)/train_size) + "% done")
@@ -144,7 +122,7 @@ test_sentences = pad_input(test_sentences, seq_len)
 train_labels = np.array(train_labels)
 test_labels = np.array(test_labels)
 
-split_frac = 0.5 # 50% validation, 50% test
+split_frac = 0.5    # 50% validation, 50% test
 split_id = int(split_frac * len(test_sentences))
 val_sentences, test_sentences = test_sentences[:split_id], test_sentences[split_id:]
 val_labels, test_labels = test_labels[:split_id], test_labels[split_id:]

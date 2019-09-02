@@ -37,7 +37,7 @@ target_vocab = word2idx.keys()
 
 model = BiRNN(vocab_size, target_vocab, output_size, embedding_dim, hidden_dim, n_layers).to(device)
 
-model.load_state_dict(torch.load('./models/state_dict_val_loss_only_hid_pos_downsample.pt'))
+model.load_state_dict(torch.load('./models/state_dict_val_loss_only_emb_pos_downsample.pt'))
 model.eval()
 
 h = model.init_hidden(batch_size)
