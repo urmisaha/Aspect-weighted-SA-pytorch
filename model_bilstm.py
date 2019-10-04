@@ -3,13 +3,25 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support
 import torch.nn as nn
 # from preprocessing import *
-import bcolz
+# import bcolz
 import pickle
 import numpy as np
 import random
 import json
+import os
 
-print("ontology weights - only hidden - negative upsampled")
+def seed_everything(seed=1234):
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.enabled = False
+
+seed_everything()
+
+print("ontology weights - only hidden - negative upsampled - 1234")
 
 torch.set_printoptions(edgeitems=10)
 # torch.set_printoptions(profile="full")
@@ -25,7 +37,7 @@ train_data = TensorDataset(torch.from_numpy(train_sentences), torch.from_numpy(t
 val_data = TensorDataset(torch.from_numpy(val_sentences), torch.from_numpy(val_labels))
 test_data = TensorDataset(torch.from_numpy(test_sentences), torch.from_numpy(test_labels))
 
-batch_size = 400
+batch_size = 200
 
 train_loader = DataLoader(train_data, shuffle=False, batch_size=batch_size)
 val_loader = DataLoader(val_data, shuffle=False, batch_size=batch_size)
@@ -41,18 +53,18 @@ else:
     device = torch.device("cpu")
 
 
-def create_emb_layer(weights_matrix, non_trainable=False):
-    # num_embeddings, embedding_dim = weights_matrix.size()
-    num_embeddings, embedding_dim = weights_matrix.shape
-    # emb_layer = nn.Embedding.from_pretrained(weights_matrix)
-    emb_layer = nn.Embedding(num_embeddings, embedding_dim)
-    emb_layer.weight.data.copy_(torch.from_numpy(weights_matrix))
-    # emb_layer.load_state_dict({'weight': weights_matrix})
-    if non_trainable:
-        emb_layer.weight.requires_grad = False
+# def create_emb_layer(weights_matrix, non_trainable=False):
+#     # num_embeddings, embedding_dim = weights_matrix.size()
+#     num_embeddings, embedding_dim = weights_matrix.shape
+#     # emb_layer = nn.Embedding.from_pretrained(weights_matrix)
+#     emb_layer = nn.Embedding(num_embeddings, embedding_dim)
+#     emb_layer.weight.data.copy_(torch.from_numpy(weights_matrix))
+#     # emb_layer.load_state_dict({'weight': weights_matrix})
+#     if non_trainable:
+#         emb_layer.weight.requires_grad = False
 
-    # return emb_layer, num_embeddings, embedding_dim
-    return emb_layer, embedding_dim
+#     # return emb_layer, num_embeddings, embedding_dim
+#     return emb_layer, embedding_dim
 
 def softmax(l):
     return np.exp(l)/np.sum(np.exp(l)) 
@@ -67,10 +79,10 @@ with open("aspect_weights.pkl", "rb") as f:
 with open("aspect_term_mapping.pkl", "rb") as f:
     aspect_term_mapping = pickle.load(f)
 
-with open("./ontology/restaurant/concepts_list.pkl", "rb") as f:
+with open("./ontology/restaurant/concepts_list_new.pkl", "rb") as f:
     concepts_list = pickle.load(f)
 
-with open("./ontology/restaurant/scores.json", "r") as f:
+with open("./ontology/restaurant/scores_new.json", "r") as f:
     scores = json.load(f)
 
 # Bidirectional recurrent neural network (many-to-one)
@@ -83,25 +95,25 @@ class BiRNN(nn.Module):
         self.dropout = nn.Dropout(drop_prob)
 
         # Pretrained embedding multiplied by aspect weights
-        vectors = bcolz.open(f'6B.100.dat')[:]
+        # vectors = bcolz.open(f'6B.100.dat')[:]
         words = pickle.load(open(f'6B.100_words.pkl', 'rb'))
         word2idx = pickle.load(open(f'6B.100_idx.pkl', 'rb'))
 
-        glove = {w: vectors[word2idx[w]-1] for w in words}
+        # glove = {w: vectors[word2idx[w]-1] for w in words}
 
-        self.glove = glove
+        # self.glove = glove
 
         matrix_len = len(target_vocab)
         weights_matrix = np.zeros((matrix_len, 100))
         words_found = 0
 
-        for i, word in enumerate(target_vocab):
-            try:
-                if word in concepts_list: 
-                    weights_matrix[i] = glove[word] * aspect_weights[aspect_term_mapping[word]] * 10
-                words_found += 1
-            except KeyError:
-                weights_matrix[i] = np.random.normal(scale=0.6, size=(embedding_dim, ))
+        # for i, word in enumerate(target_vocab):
+        #     try:
+        #         if word in concepts_list: 
+        #             weights_matrix[i] = glove[word] * aspect_weights[aspect_term_mapping[word]] * 10
+        #         words_found += 1
+        #     except KeyError:
+        #         weights_matrix[i] = np.random.normal(scale=0.6, size=(embedding_dim, ))
 
         # self.embedding, embedding_dim = create_emb_layer(weights_matrix, True)
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
@@ -111,27 +123,36 @@ class BiRNN(nn.Module):
 
     def forward(self, x, hidden):
         embeds = self.embedding(x)
-
         avg_aspect_W = []
+        # count_one = 0
+        # count_o = 0
         for s, sent in enumerate(x):
+            # print(sent)     # 200 length vector of integers which are indices of words
             # r = random.random() * 10
+            weights_s = []
             for i, e in enumerate(sent):
-                weights_s = []
                 if int(e) != 0 and idx2word[int(e)] in concepts_list:
                     word = idx2word[int(e)]
-                    # w = aspect_weights[aspect_term_mapping[word]]
                     w = scores[word]
                     # Multiplying embedding layer outputs with aspect weights
-                    # embeds[s][i] *= w
+                    # embeds[s][i] *= w*10
                     # embeds[s][i] *= r
 
                     # Creating weight matrix to multiply with the outputs of last hidden layer
                     weights_s.append(w)
-            # a = 10*np.mean(weights_s) if len(weights_s) > 0 else 1
-            a = np.mean(weights_s) if len(weights_s) > 0 else 1
-            # a = 1
+            # a = 10*np.mean(weights_s) if len(weights_s) > 0 else 1    # uncomment this line for CP-weighted model
+            a = np.mean(weights_s) if len(weights_s) > 0 else 1         # uncomment this line for ontology-weighted model        
+            # a = r                                                     # uncomment this line for random-weighted model
+            # a = 1                                                     # uncomment this line for unweighted hidden layer model
+            # print(a)
+            # if a == 1:
+            #     count_one += 1
+            # else:
+            #     count_o += 1
             avg_aspect_W.append([a]*1024)
-        
+        # print("counts:")
+        # print(count_one)
+        # print(count_o)
         # Set initial states
         h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device) # 2 for bidirection 
         c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)
@@ -216,13 +237,13 @@ for i in range(epochs):
                   "Loss: {:.6f}...".format(loss.item()),
                   "Val Loss: {:.6f}".format(np.mean(val_losses)))
             if np.mean(val_losses) < valid_loss_min:
-                torch.save(model.state_dict(), 'models/state_dict_val_loss_both_neg_upsample.pt')
+                torch.save(model.state_dict(), 'models/state_dict_val_onto_upsample2.pt')
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
 
 # Loading the best model
-model.load_state_dict(torch.load('models/state_dict_val_loss_both_neg_upsample.pt'))
+model.load_state_dict(torch.load('models/state_dict_val_onto_upsample2.pt'))
 
 test_losses = []
 num_correct = 0
@@ -264,4 +285,4 @@ print("Test loss: {:.3f}".format(np.mean(test_losses)))
 test_acc = num_correct/len(test_loader.dataset)
 print("Test accuracy: {:.3f}%".format(test_acc*100))
 print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-print("ontology weights - only hidden - negative upsampled")
+print("ontology weights - only hidden - upsampled - 1234")

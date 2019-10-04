@@ -1,3 +1,8 @@
+'''
+To run this file, one arguement is expected: no-sample or up-sample or down-sample
+Read the lines from 50-53 and uncomment the correct line. Update the value of train_labels with the value of the train_sentences uncommented
+Run the file with the proper argument depending on the line uncommented
+'''
 import sys
 import bz2
 from collections import Counter
@@ -45,7 +50,7 @@ dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
 # train_sentences = dataset[0:67600,0]    # without resampling  -  negative: 13253  -  positive: 55620
 train_sentences = dataset[0:111200,0]   # negative data upsampled
-#train_sentences = dataset[0:26400,0]    # positive data downsampled
+# train_sentences = dataset[0:26400,0]    # positive data downsampled
 # train_sentences = dataset[0:20000,0]    # test data
 train_labels = dataset[0:111200,1].astype(int)
 
@@ -59,9 +64,11 @@ print("Data load completed..")
 # Some simple cleaning of data
 for i in range(len(train_sentences)):
     train_sentences[i] = re.sub('\d','0',train_sentences[i])
+    # train_sentences[i] = re.sub('\\n','',train_sentences[i])
 
 for i in range(len(test_sentences)):
     test_sentences[i] = re.sub('\d','0',test_sentences[i])
+    # test_sentences[i] = re.sub('\\n','',test_sentences[i])
 
 # Modify URLs to <url>
 for i in range(len(train_sentences)):
