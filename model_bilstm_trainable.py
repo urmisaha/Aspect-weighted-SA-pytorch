@@ -8,7 +8,7 @@ import random
 import json
 import os
 
-def seed_everything(seed=1234):
+def seed_everything(seed=2341):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -21,8 +21,8 @@ seed_everything()
 
 print("ontology weights - only hidden - negative upsampled - 1234")
 
-torch.set_printoptions(edgeitems=5)
-# torch.set_printoptions(profile="full")
+# torch.set_printoptions(edgeitems=5)
+torch.set_printoptions(profile="full")
 
 train_sentences = pickle.load(open(f'train_sentences.pkl', 'rb'))
 val_sentences = pickle.load(open(f'val_sentences.pkl', 'rb'))
@@ -75,7 +75,7 @@ idx2word = pickle.load(open(f'idx2word.pkl', 'rb'))
 # Bidirectional recurrent neural network (many-to-one)
 class BiRNN(nn.Module):
 
-    def __init__(self, vocab_size, target_vocab, output_size, embedding_dim, hidden_dim, n_layers, drop_prob=0.5):
+    def __init__(self, vocab_size, target_vocab, output_size, embedding_dim, hidden_dim, n_layers, drop_prob=0):
         super(BiRNN, self).__init__()
         self.hidden_size = hidden_dim
         self.num_layers = n_layers
@@ -92,7 +92,7 @@ class BiRNN(nn.Module):
         self.aspect_scores.weight = torch.nn.Parameter(weights_matrix)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.lstm2 = nn.LSTM(hidden_dim*2, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
-        self.fc = nn.Linear(hidden_dim*2, output_size)          # 2 for bidirection
+        self.fc = nn.Linear(hidden_dim, output_size)            # 2 for bidirection
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x, hidden):                               # x.shape =  torch.Size([10, 200]) (batch_size, seq_length)
@@ -114,10 +114,11 @@ class BiRNN(nn.Module):
         scores_matrix = scores_matrix.repeat(1, 1, hidden_dim*2)                    # scores_matrix.shape =  torch.Size([10, 200, 1024])
         lstm_out = lstm_out*scores_matrix
         lstm_out, (hidden, cell) = self.lstm2(lstm_out, (h1, c1))                   # lstm_out: tensor of shape (batch_size, seq_length, hidden_size*2)
-        hidden = self.dropout(torch.cat((hidden[-2,:,:], cell[-1,:,:]), dim = 1))   # after dropout: hidden.shape =  torch.Size([10, 1024])
+        # hidden = self.dropout(torch.cat((hidden[-2,:,:], cell[-1,:,:]), dim = 1))   # after dropout: hidden.shape =  torch.Size([10, 1024])
+        # hidden = self.dropout(torch.cat((hidden[-2,:,:], cell[-1,:,:]), dim = 1))   # after dropout: hidden.shape =  torch.Size([10, 1024])
     
         # Decode the hidden state of the last time step
-        lstm_out = self.fc(hidden)
+        lstm_out = self.fc(hidden[-2,:,:])
         lstm_out = self.sigmoid(lstm_out)
         return lstm_out
     
@@ -130,7 +131,7 @@ vocab_size = len(word2idx) + 1
 output_size = 1
 embedding_dim = 100
 hidden_dim = 512
-n_layers = 2
+n_layers = 1
 
 target_vocab = word2idx.keys()
 
@@ -147,8 +148,7 @@ clip = 5
 valid_loss_min = np.Inf
 train_loss_min = np.Inf
 
-print("model.aspect_scores before training")
-print(np.mean(model.aspect_scores.weight.detach().cpu().numpy()))
+initial_weights = model.aspect_scores.weight                   # model.aspect_scores before training
 
 print("Start training..")
 model.train()
@@ -186,8 +186,6 @@ for i in range(epochs):
                 val_losses.append(val_loss.item())
                 
             model.train()
-            print("model.aspect_scores after training")
-            print(np.mean(model.aspect_scores.weight.detach().cpu().numpy()))
             print("Epoch: {}/{}...".format(i+1, epochs),
                   "Step: {}...".format(counter),
                   "Loss: {:.6f}...".format(loss.item()),
@@ -197,7 +195,8 @@ for i in range(epochs):
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
-
+final_weights = model.aspect_scores.weight                   # model.aspect_scores after training
+            
 # Loading the best model
 model.load_state_dict(torch.load('models/state_dict_val_onto_upsample1.pt'))
 
