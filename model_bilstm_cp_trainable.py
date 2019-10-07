@@ -8,7 +8,7 @@ import random
 import json
 import os
 
-def seed_everything(seed=1423):
+def seed_everything(seed=4123):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -19,7 +19,7 @@ def seed_everything(seed=1423):
 
 seed_everything()
 
-print("ontology weights - only hidden - negative upsampled - 1423")
+print("ontology weights - only hidden - negative upsampled - 4123")
 
 # torch.set_printoptions(edgeitems=5)
 torch.set_printoptions(profile="full")
@@ -54,20 +54,21 @@ def softmax(l):
     return np.exp(l)/np.sum(np.exp(l)) 
 
 # For Weighted Word Embeddings 
-with open("aspect_term_list.pkl", "rb") as f:
-    aspect_term_list = pickle.load(f)
+aspect_term_list = pickle.load(open("aspect_term_list.pkl", "rb"))
+aspect_weights = pickle.load(open("aspect_weights.pkl", "rb"))
 
-with open("aspect_weights.pkl", "rb") as f:
-    aspect_weights = pickle.load(f)
+for key, val in aspect_weights.items():
+    aspect_weights[key] = np.around(val, decimals=1)
 
-with open("aspect_term_mapping.pkl", "rb") as f:
-    aspect_term_mapping = pickle.load(f)
+aspect_weights['ambience'] = 0.7
 
-with open("./ontology/restaurant/concepts_list_new.pkl", "rb") as f:
-    concepts_list = pickle.load(f)
+aspect_term_mapping = pickle.load(open("aspect_term_mapping.pkl", "rb"))
 
-with open("./ontology/restaurant/scores_new.json", "r") as f:
-    scores = json.load(f)
+# with open("./ontology/restaurant/concepts_list.pkl", "rb") as f:
+#     concepts_list = pickle.load(f)
+
+# with open("./ontology/restaurant/scores.json", "r") as f:
+#     scores = json.load(f)
 
 word2idx = pickle.load(open(f'word2idx.pkl', 'rb'))
 idx2word = pickle.load(open(f'idx2word.pkl', 'rb'))
@@ -84,8 +85,9 @@ class BiRNN(nn.Module):
         weights_matrix = torch.ones((vocab_size, 1))
         
         for v in target_vocab:
-            if v in scores.keys():
-                weights_matrix[word2idx[v], 0] = scores[v]
+            word_i = word2idx[v]
+            if int(word_i) != 0 and v in aspect_term_list:
+                weights_matrix[word2idx[v], 0] = float(aspect_weights[aspect_term_mapping[v]])
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.aspect_scores = nn.Embedding(vocab_size, 1)
@@ -148,7 +150,7 @@ clip = 5
 valid_loss_min = np.Inf
 train_loss_min = np.Inf
 
-initial_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()                   # model.aspect_scores before training
+initial_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()    # model.aspect_scores before training
 
 print("Start training..")
 model.train()
@@ -199,17 +201,16 @@ final_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()            
 diff_weights = torch.abs(initial_weights - final_weights)
 
 trained_scores_dict = {}
-f = open('onto_scores_trained.csv', 'w+')
+f = open('cp_scores_trained.csv', 'w+')
 f.write('term,initial,trained,diff')
 for v in target_vocab:
-    if v in scores.keys():
+    if v in aspect_term_list:
         word_i = word2idx[v]
         f.write('\n' + v + ',' + str(initial_weights[word_i].numpy()) + ',' + str(final_weights[word_i].numpy()) + str(diff_weights[word_i].numpy()))
         trained_scores_dict[v] = {'initial': initial_weights[word_i], 'trained': final_weights[word_i], 'diff': diff_weights[word_i]}
 f.close()
-pickle.dump(trained_scores_dict, open(f'onto_scores_trained_dict.pkl', 'wb'))
-
-
+pickle.dump(trained_scores_dict, open(f'cp_scores_trained_dict.pkl', 'wb'))
+            
 # Loading the best model
 model.load_state_dict(torch.load('models/state_dict_val_onto_upsample1.pt'))
 
@@ -254,4 +255,4 @@ print("Test loss: {:.3f}".format(np.mean(test_losses)))
 test_acc = num_correct/len(test_loader.dataset)
 print("Test accuracy: {:.3f}%".format(test_acc*100))
 print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-print("num_layers=1 - ontology weights - only hidden - upsampled - 1423")
+print("num_layers=1 - cp weights - only hidden - upsampled - 4123")
