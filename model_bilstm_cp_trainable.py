@@ -8,7 +8,7 @@ import random
 import json
 import os
 
-def seed_everything(seed=4123):
+def seed_everything(seed=2341):
     random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -19,7 +19,7 @@ def seed_everything(seed=4123):
 
 seed_everything()
 
-print("ontology weights - only hidden - negative upsampled - 4123")
+print("cp weights - only embedding - positive downsampled - 2341")
 
 # torch.set_printoptions(edgeitems=5)
 torch.set_printoptions(profile="full")
@@ -46,7 +46,7 @@ is_cuda = torch.cuda.is_available()
 
 # If we have a GPU available, we'll set our device to GPU. We'll use this device variable later in our code.
 if is_cuda:
-    device = torch.device("cuda")
+    device = torch.device("cuda:0")
 else:
     device = torch.device("cpu")
 
@@ -87,11 +87,13 @@ class BiRNN(nn.Module):
         for v in target_vocab:
             word_i = word2idx[v]
             if int(word_i) != 0 and v in aspect_term_list:
-                weights_matrix[word2idx[v], 0] = float(aspect_weights[aspect_term_mapping[v]])
+                weights_matrix[word2idx[v], 0] = float(aspect_weights[aspect_term_mapping[v]]*10)
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.aspect_scores = nn.Embedding(vocab_size, 1)
+        # self.aspect_scores2 = nn.Embedding(vocab_size, 1)
         self.aspect_scores.weight = torch.nn.Parameter(weights_matrix)
+        # self.aspect_scores2.weight = torch.nn.Parameter(weights_matrix)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.lstm2 = nn.LSTM(hidden_dim*2, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.fc = nn.Linear(hidden_dim, output_size)            # 2 for bidirection
@@ -99,8 +101,10 @@ class BiRNN(nn.Module):
 
     def forward(self, x, hidden):                               # x.shape =  torch.Size([10, 200]) (batch_size, seq_length)
         scores_matrix = self.aspect_scores(x)                   # scores_matrix.shape =  torch.Size([10, 200, 1])
+        # scores_matrix2 = self.aspect_scores(x)                  # scores_matrix2.shape =  torch.Size([10, 200, 1])
         embeds = self.embedding(x)                              # embeds.shape =  torch.Size([10, 200, 100])
-        # embeds = embeds*scores_matrix
+        # scores_matrix1 = scores_matrix.repeat(1, 1, embedding_dim)                    # scores_matrix1.shape =  torch.Size([10, 200, emb_dim])
+        # embeds = embeds*scores_matrix1
         
         # Set initial states
         h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device) # h0.shape =  torch.Size([2, 10, 512]) : 2 for bidirection
@@ -113,8 +117,8 @@ class BiRNN(nn.Module):
         lstm_out, (hidden, cell) = self.lstm(embeds, (h0, c0))                      # lstm_out.shape =  torch.Size([10, 200, 1024]) (batch_size, seq_length, hidden_size*2) | hidden.shape =  torch.Size([2, 10, 512]) | cell.shape =  torch.Size([2, 10, 512])
 
         # Multiplying weights to outputs of first bilstm layer
-        scores_matrix = scores_matrix.repeat(1, 1, hidden_dim*2)                    # scores_matrix.shape =  torch.Size([10, 200, 1024])
-        lstm_out = lstm_out*scores_matrix
+        scores_matrix2 = scores_matrix.repeat(1, 1, hidden_dim*2)                    # scores_matrix2.shape =  torch.Size([10, 200, 1024])
+        lstm_out = lstm_out*scores_matrix2
         lstm_out, (hidden, cell) = self.lstm2(lstm_out, (h1, c1))                   # lstm_out: tensor of shape (batch_size, seq_length, hidden_size*2)
         # hidden = self.dropout(torch.cat((hidden[-2,:,:], cell[-1,:,:]), dim = 1))   # after dropout: hidden.shape =  torch.Size([10, 1024])
         # hidden = self.dropout(torch.cat((hidden[-2,:,:], cell[-1,:,:]), dim = 1))   # after dropout: hidden.shape =  torch.Size([10, 1024])
@@ -193,7 +197,7 @@ for i in range(epochs):
                   "Loss: {:.6f}...".format(loss.item()),
                   "Val Loss: {:.6f}".format(np.mean(val_losses)))
             if np.mean(val_losses) < valid_loss_min:
-                torch.save(model.state_dict(), 'models/state_dict_val_onto_upsample1.pt')
+                torch.save(model.state_dict(), 'models/state_dict_val_cp_downsample2341.pt')
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
@@ -201,18 +205,18 @@ final_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()            
 diff_weights = torch.abs(initial_weights - final_weights)
 
 trained_scores_dict = {}
-f = open('cp_scores_trained.csv', 'w+')
+f = open('cp_scores_trained_bilstm.csv', 'w+')
 f.write('term,initial,trained,diff')
 for v in target_vocab:
     if v in aspect_term_list:
         word_i = word2idx[v]
-        f.write('\n' + v + ',' + str(initial_weights[word_i].numpy()) + ',' + str(final_weights[word_i].numpy()) + str(diff_weights[word_i].numpy()))
+        f.write('\n' + v + ',' + str(initial_weights[word_i].numpy()) + ',' + str(final_weights[word_i].numpy()) + ',' + str(diff_weights[word_i].numpy()))
         trained_scores_dict[v] = {'initial': initial_weights[word_i], 'trained': final_weights[word_i], 'diff': diff_weights[word_i]}
 f.close()
-pickle.dump(trained_scores_dict, open(f'cp_scores_trained_dict.pkl', 'wb'))
+pickle.dump(trained_scores_dict, open(f'cp_scores_trained_dict_bilstm.pkl', 'wb'))
             
 # Loading the best model
-model.load_state_dict(torch.load('models/state_dict_val_onto_upsample1.pt'))
+model.load_state_dict(torch.load('models/state_dict_val_cp_downsample2341.pt'))
 
 test_losses = []
 num_correct = 0
@@ -255,4 +259,4 @@ print("Test loss: {:.3f}".format(np.mean(test_losses)))
 test_acc = num_correct/len(test_loader.dataset)
 print("Test accuracy: {:.3f}%".format(test_acc*100))
 print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-print("num_layers=1 - cp weights - only hidden - upsampled - 4123")
+print("num_layers=1 - cp weights - only embedding - positive downsampled - 2341")
