@@ -12,4 +12,5 @@ We incorporate these scores into our neural architecture to find the sentiment o
 1. Run glove_embeddings.py if corresponding pickle files are already not created
 2. Run preprocessing.py if corresponding pickle files are already not created
 3. Run model.py
+
 P.S: Read the commented introduction in each of the files mentioned to run the commands correctly.
