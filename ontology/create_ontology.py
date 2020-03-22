@@ -27,12 +27,16 @@ limit = sys.argv[2]
 # aspect_categories = ["restaurant", "food", "service", "price", "ambience"]
 # aspect_categories = ["movie", "music", "acting", "plot", "direction"]
 # aspect_categories = ["music", "genre", "lyrics", "artist"]
-aspect_categories = ["ride", "driver", "fare", "time"]
+# aspect_categories = ["ride", "driver", "fare", "time"]
+aspect_categories = ["hotel", "room", "cleanliness", "value", "service", "location", "checkin", "business"]
 aspect_scores[aspect_categories[0]] = float(sys.argv[3])
 aspect_scores[aspect_categories[1]] = float(sys.argv[4])
 aspect_scores[aspect_categories[2]] = float(sys.argv[5])
 aspect_scores[aspect_categories[3]] = float(sys.argv[6])
-# aspect_scores[aspect_categories[4]] = float(sys.argv[7])
+aspect_scores[aspect_categories[4]] = float(sys.argv[7])
+aspect_scores[aspect_categories[5]] = float(sys.argv[8])
+aspect_scores[aspect_categories[6]] = float(sys.argv[9])
+aspect_scores[aspect_categories[7]] = float(sys.argv[10])
 
 # for i in range(1, 8):
 #     print(sys.argv[i])
@@ -50,7 +54,6 @@ def extract_concepts(node, node_limit):
                 synonyms.append(l.name().lower())
     synonyms = set(synonyms)
     for syn_p in synonyms:
-        # if node == "restaurant":
         if node == root:
             parent[syn_p] = ""
         score[syn_p] = score[node]
@@ -67,7 +70,8 @@ def extract_concepts(node, node_limit):
                         ch = ch.lower()
                         if ch not in stopwords and ch not in ['a', 'an', 'the'] and ps.stem(syn_p) != ps.stem(ch) and ch not in concepts:
                             # concepts.append({'start': syn_p, 'end': ch, 'weight': e['weight']})
-                            score[ch] = float(score[syn_p])/2
+                            score[ch] = float(score[syn_p])/2       # weights of child nodes are half of those of parent nodes
+                            # score[ch] = float(e['weight'])          # weights are taken from conceptnet property "weight"
                             concepts.append(ch)
                             parent[ch] = syn_p
             except:

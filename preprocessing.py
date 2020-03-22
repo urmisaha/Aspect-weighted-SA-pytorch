@@ -26,6 +26,7 @@ except:
 domain = sys.argv[2]
 
 dataframe = pandas.read_csv("dataset/" + domain + "/train.csv", header=None, names=['sentence', 'sentiment'])
+print(dataframe)
 if domain == "movie":
     dataframe['sentiment'].replace(['positive', 'negative'], [1, 0], inplace=True)
 
@@ -33,6 +34,9 @@ if domain == "movie":
 # ======================================================================
 df_positive = dataframe[dataframe['sentiment']==1]      # 55620
 df_negative = dataframe[dataframe['sentiment']==0]      # 13253
+
+# print(df_positive.shape[0])
+# print(df_negative.shape[0])
 
 if df_positive.shape[0] > df_negative.shape[0]:
     df_majority = df_positive
@@ -72,8 +76,8 @@ if domain == "movie":
     dataframe['sentiment'].replace(['positive', 'negative'], [1, 0], inplace=True)
 dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
-test_sentences = dataset[0:16000,0]
-test_labels = dataset[0:16000,1].astype(int)
+test_sentences = dataset[0:5000,0]
+test_labels = dataset[0:5000,1].astype(int)
 
 print("Data load completed..")
 

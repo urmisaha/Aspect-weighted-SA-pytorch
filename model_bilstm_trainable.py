@@ -25,6 +25,7 @@ import os
 seed = 1234
 batch_size = 100
 domain = sys.argv[1]
+domain2 = sys.argv[2]
 sampling = "no"                             # down|up|no  -  just for logs
 weighted = "weighted"                     # unweighted/weighted - just for logs
 dataamount = "50000"
@@ -42,16 +43,16 @@ seed_everything()
 
 print(weighted + " - " + sampling + " sampled - " + dataamount + " - " + str(seed))
 
-torch.set_printoptions(edgeitems=5)
+torch.set_printoptions(edgeitems=2)
 # torch.set_printoptions(profile="full")
 
 train_sentences = pickle.load(open(f'dataset/' + domain + '/train_sentences.pkl', 'rb'))
 val_sentences = pickle.load(open(f'dataset/' + domain + '/val_sentences.pkl', 'rb'))
-test_sentences = pickle.load(open(f'dataset/' + domain + '/test_sentences.pkl', 'rb'))
+test_sentences = pickle.load(open(f'dataset/' + domain2 + '/test_sentences.pkl', 'rb'))
 train_labels = pickle.load(open(f'dataset/' + domain + '/train_labels.pkl', 'rb'))
 val_labels = pickle.load(open(f'dataset/' + domain + '/val_labels.pkl', 'rb'))
-test_labels = pickle.load(open(f'dataset/' + domain + '/test_labels.pkl', 'rb'))
-print(type(test_labels[0]))
+test_labels = pickle.load(open(f'dataset/' + domain2 + '/test_labels.pkl', 'rb'))
+# print(type(test_labels[0]))
 train_data = TensorDataset(torch.from_numpy(train_sentences), torch.from_numpy(train_labels))
 val_data = TensorDataset(torch.from_numpy(val_sentences), torch.from_numpy(val_labels))
 test_data = TensorDataset(torch.from_numpy(test_sentences), torch.from_numpy(test_labels))
@@ -90,6 +91,9 @@ with open("./ontology/" + domain + "/scores_new.json", "r") as f:
 
 word2idx = pickle.load(open(f'dataset/' + domain + '/word2idx.pkl', 'rb'))
 idx2word = pickle.load(open(f'dataset/' + domain + '/idx2word.pkl', 'rb'))
+cn_words = pickle.load(open(f'./cn_nb.300_words.pkl', 'rb'))
+cn_word2idx = pickle.load(open(f'./cn_nb.300_idx.pkl', 'rb'))
+cn_embs = pickle.load(open(f'./cn_nb.300_embs.pkl', 'rb'))
 
 # Bidirectional recurrent neural network (many-to-one)
 class BiRNN(nn.Module):
@@ -100,16 +104,28 @@ class BiRNN(nn.Module):
         self.num_layers = n_layers
         self.dropout = nn.Dropout(drop_prob)
 
-        weights_matrix = torch.ones((vocab_size, 1))
+        scores_matrix = torch.ones((vocab_size, 1))
+        weights_matrix = torch.ones((vocab_size, embedding_dim))
         for v in target_vocab:
-            if v in scores.keys():
-                # weights_matrix[word2idx[v], 0] = 2
-                # weights_matrix[word2idx[v], 0] = np.random.random()*10
-                weights_matrix[word2idx[v], 0] = scores[v]
-
+            try:
+                if v in ['_PAD','_UNK']:
+                    weights_matrix[word2idx[v]] = torch.from_numpy(cn_embs[0])
+                else:
+                    weights_matrix[word2idx[v]] = torch.from_numpy(cn_embs[cn_word2idx[v]])
+            except:
+                pass
+            # if v in scores.keys():
+                # scores_matrix[word2idx[v], 0] = 2
+                # scores_matrix[word2idx[v], 0] = np.random.random()*10
+                # scores_matrix[word2idx[v], 0] = scores[v]
+        # weights_matrix = torch.from_numpy(weights_matrix).double()
+        # print(scores_matrix)
+        # print(weights_matrix)
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.embedding.weight = torch.nn.Parameter(weights_matrix)
+        self.embedding.weight.requires_grad = False
         self.aspect_scores = nn.Embedding(vocab_size, 1)
-        self.aspect_scores.weight = torch.nn.Parameter(weights_matrix)
+        self.aspect_scores.weight = torch.nn.Parameter(scores_matrix)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.lstm2 = nn.LSTM(hidden_dim*2, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.fc = nn.Linear(hidden_dim*2, output_size)                                # 2 for bidirection, when dropout
@@ -168,7 +184,7 @@ class BiRNN(nn.Module):
 
 vocab_size = len(word2idx) + 1
 output_size = 1
-embedding_dim = 100
+embedding_dim = 300
 hidden_dim = 512
 n_layers = 1
 
