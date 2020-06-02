@@ -1,12 +1,14 @@
-# arguements of this file:
 '''
+INSTRUCTIONS:
+
+Arguements of this file:
 domain
 limit for extraction for each node
-scores for restaurant
-scores for food
-scores for service
-scores for price
-scores for ambience
+scores for roots
+scores for aspects (aspect_categories - special nodes)
+
+*** CREATE A FOLDER CALLED "[domain]" UNDER FOLDER "ontology" ***
+
 '''
 
 import requests
@@ -21,30 +23,41 @@ from nltk.corpus import wordnet
 stopwords = set(stopwords.words('english'))
 ps = PorterStemmer()
 
-aspect_scores = {}
+# Dictionary holding domains(all domains on which experiments are being performed) mapped to their aspect categories
+'''
+This part can be taken as input from users: domain and its categories.
+Create this dictionary on getting the inputs. Then proceed with the rest of the code.
+'''
+aspect_categories = {}
+aspect_categories["restaurant"] = ["food", "service", "price", "ambience"]
+aspect_categories["movie"] = ["music", "acting", "plot", "direction"]
+aspect_categories["music"] = ["genre", "lyrics", "artist"]
+aspect_categories["ride"] = ["driver", "fare", "time"]
+aspect_categories["hotel"] = ["room", "cleanliness", "value", "service", "location", "checkin", "business"] 
+
 root = sys.argv[1]
 limit = sys.argv[2]
-# aspect_categories = ["restaurant", "food", "service", "price", "ambience"]
-# aspect_categories = ["movie", "music", "acting", "plot", "direction"]
-# aspect_categories = ["music", "genre", "lyrics", "artist"]
-# aspect_categories = ["ride", "driver", "fare", "time"]
-aspect_categories = ["hotel", "room", "cleanliness", "value", "service", "location", "checkin", "business"]
-aspect_scores[aspect_categories[0]] = float(sys.argv[3])
-aspect_scores[aspect_categories[1]] = float(sys.argv[4])
-aspect_scores[aspect_categories[2]] = float(sys.argv[5])
-aspect_scores[aspect_categories[3]] = float(sys.argv[6])
-aspect_scores[aspect_categories[4]] = float(sys.argv[7])
-aspect_scores[aspect_categories[5]] = float(sys.argv[8])
-aspect_scores[aspect_categories[6]] = float(sys.argv[9])
-aspect_scores[aspect_categories[7]] = float(sys.argv[10])
+rt_score = float(sys.argv[3])
+as_score = float(sys.argv[4])
 
-# for i in range(1, 8):
-#     print(sys.argv[i])
+folder = root
 
-
+# these are the three data dumped in pickle files
 concepts = []
 score = {}
 parent = {}
+
+aspects = []
+aspect_scores = {}
+
+parent[root] = ""
+aspects.append(root)
+aspect_scores[root] = rt_score
+for aspect in aspect_categories[root]:
+    parent[aspect] = root
+    aspects.append(aspect)
+    aspect_scores[aspect] = as_score
+print(aspects)
 
 def extract_concepts(node, node_limit):
     synonyms = [node.lower()]
@@ -54,8 +67,6 @@ def extract_concepts(node, node_limit):
                 synonyms.append(l.name().lower())
     synonyms = set(synonyms)
     for syn_p in synonyms:
-        if node == root:
-            parent[syn_p] = ""
         score[syn_p] = score[node]
         tree = requests.get('http://api.conceptnet.io/c/en/'+syn_p+'?offset=0&limit='+node_limit).json()
         for e in tree['edges']:
@@ -70,32 +81,34 @@ def extract_concepts(node, node_limit):
                         ch = ch.lower()
                         if ch not in stopwords and ch not in ['a', 'an', 'the'] and ps.stem(syn_p) != ps.stem(ch) and ch not in concepts:
                             # concepts.append({'start': syn_p, 'end': ch, 'weight': e['weight']})
-                            score[ch] = float(score[syn_p])/2       # weights of child nodes are half of those of parent nodes
+                            # score[ch] = float(score[syn_p])/2       # weights of child nodes are half of those of parent nodes
                             # score[ch] = float(e['weight'])          # weights are taken from conceptnet property "weight"
+                            score[ch] = float(score[syn_p])/2 + float(e['weight'])          # both conceptnet "weight" and half of parent's score
                             concepts.append(ch)
                             parent[ch] = syn_p
             except:
                 pass
-    print("node: " + node)
-    print(synonyms)
+    if node == root:
+        print("root:::::: " + node)
+    else:
+        print("node: " + node)
     print(len(synonyms))    
+    print(synonyms)
 
 
-for concept in aspect_categories:
-    if concept != root:
-        parent[concept] = root
+for concept in aspects:
     concepts.append(concept)
     score[concept] = aspect_scores[concept]
     extract_concepts(concept, limit)
 
-with open("./"+root+"/scores_new.json", "w+") as f:
+with open("./"+folder+"/scores.json", "w+") as f:
     f.write(json.dumps(score, indent=4, sort_keys=True))
 f.close()
 
-with open("./"+root+"/parents_new.json", "w+") as f:
+with open("./"+folder+"/parents.json", "w+") as f:
     f.write(json.dumps(parent, indent=4, sort_keys=True))
 f.close()
 
-pickle.dump(concepts, open('./'+root+'/concepts_list_new.pkl', 'wb'))
+pickle.dump(concepts, open('./'+folder+'/concepts_list.pkl', 'wb'))
 
 # print("Done")

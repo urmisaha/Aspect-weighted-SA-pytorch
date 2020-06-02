@@ -25,6 +25,6 @@ with open(f'numberbatch-en.txt', 'rb') as f:
     
 # vectors = bcolz.carray(vectors[1:].reshape((400000, 100)), rootdir=f'6B.100.dat', mode='w')
 # vectors.flush()
-pickle.dump(words, open(f'embeddings/cn_nb.300_words.pkl', 'wb'))
-pickle.dump(word2idx, open(f'embeddings/cn_nb.300_idx.pkl', 'wb'))
-pickle.dump(embeddings, open(f'embeddings/cn_nb.300_embs.pkl', 'wb'))
+pickle.dump(words, open(f'cn_nb.300_words.pkl', 'wb'))
+pickle.dump(word2idx, open(f'cn_nb.300_idx.pkl', 'wb'))
+pickle.dump(embeddings, open(f'cn_nb.300_embs.pkl', 'wb'))

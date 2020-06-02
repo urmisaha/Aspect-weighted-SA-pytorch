@@ -35,9 +35,6 @@ if domain == "movie":
 df_positive = dataframe[dataframe['sentiment']==1]      # 55620
 df_negative = dataframe[dataframe['sentiment']==0]      # 13253
 
-# print(df_positive.shape[0])
-# print(df_negative.shape[0])
-
 if df_positive.shape[0] > df_negative.shape[0]:
     df_majority = df_positive
     df_minority = df_negative
@@ -45,8 +42,8 @@ else:
     df_majority = df_negative
     df_minority = df_positive
     
-df_majority = resample(df_majority, replace=True, n_samples=25000)
-df_minority = resample(df_minority, replace=True, n_samples=25000)
+df_majority = resample(df_majority, replace=True, n_samples=15000)
+df_minority = resample(df_minority, replace=True, n_samples=15000)
 
 if sampling == 'up-sample':
     df_minority_upsampled = resample(df_minority, replace=True, n_samples=df_majority.shape[0])
@@ -60,14 +57,14 @@ else:
 # ======================================================================
 
 train_size = dataframe.shape[0]
+print("train_size = " + str(train_size))
+print("positive = " + str(df_positive.shape[0]))
+print("negative = " + str(df_negative.shape[0]))
 dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
-# train_sentences = dataset[0:67600,0]    # without resampling  -  negative: 13253  -  positive: 55620
-# train_sentences = dataset[0:111200,0]   # negative data upsampled
-train_sentences = dataset[0:50000,0]    # positive data downsampled
-# train_sentences = dataset[0:9900,0]    # less data
-train_labels = dataset[0:50000,1].astype(int)
-
+train_sentences = dataset[0:30000,0]    # positive data downsampled
+train_labels = dataset[0:30000,1].astype(int)
+datapoints = 30000
 print(train_sentences[0])
 
 dataframe = pandas.read_csv("dataset/" + domain + "/test.csv", header=None, names=['sentence', 'sentiment'])
@@ -76,8 +73,8 @@ if domain == "movie":
     dataframe['sentiment'].replace(['positive', 'negative'], [1, 0], inplace=True)
 dataframe = dataframe.sample(frac=1).reset_index(drop=True)
 dataset = dataframe.values
-test_sentences = dataset[0:5000,0]
-test_labels = dataset[0:5000,1].astype(int)
+test_sentences = dataset[0:17200,0]
+test_labels = dataset[0:17200,1].astype(int)
 
 print("Data load completed..")
 
@@ -171,3 +168,4 @@ pickle.dump(test_labels, open(f'dataset/' + domain + '/test_labels.pkl', 'wb'))
 
 pickle.dump(word2idx, open(f'dataset/' + domain + '/word2idx.pkl', 'wb'))
 pickle.dump(idx2word, open(f'dataset/' + domain + '/idx2word.pkl', 'wb'))
+print(datapoints)

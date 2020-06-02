@@ -5,6 +5,9 @@ Command Example: python model_bilstm_trainable.py restaurant
 Change the experimental setup values to match the experiment to be currently conducted
 
 For any new domain, create folders inside dataset, models, ontology and logs folder
+ref: https://github.com/prakashpandey9/Text-Classification-Pytorch/blob/master/main.py
+
+For attenion reference: https://blog.floydhub.com/attention-mechanism/
 '''
 
 import sys
@@ -12,6 +15,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support
 import torch.nn as nn
+from torch.nn import functional as F
 import pickle
 import numpy as np
 import random
@@ -25,7 +29,6 @@ import os
 seed = 1234
 batch_size = 100
 domain = sys.argv[1]
-domain2 = sys.argv[2]
 sampling = "no"                             # down|up|no  -  just for logs
 weighted = "weighted"                     # unweighted/weighted - just for logs
 dataamount = "50000"
@@ -48,11 +51,11 @@ torch.set_printoptions(edgeitems=2)
 
 train_sentences = pickle.load(open(f'dataset/' + domain + '/train_sentences.pkl', 'rb'))
 val_sentences = pickle.load(open(f'dataset/' + domain + '/val_sentences.pkl', 'rb'))
-test_sentences = pickle.load(open(f'dataset/' + domain2 + '/test_sentences.pkl', 'rb'))
+test_sentences = pickle.load(open(f'dataset/' + domain + '/test_sentences.pkl', 'rb'))
 train_labels = pickle.load(open(f'dataset/' + domain + '/train_labels.pkl', 'rb'))
 val_labels = pickle.load(open(f'dataset/' + domain + '/val_labels.pkl', 'rb'))
-test_labels = pickle.load(open(f'dataset/' + domain2 + '/test_labels.pkl', 'rb'))
-# print(type(test_labels[0]))
+test_labels = pickle.load(open(f'dataset/' + domain + '/test_labels.pkl', 'rb'))
+
 train_data = TensorDataset(torch.from_numpy(train_sentences), torch.from_numpy(train_labels))
 val_data = TensorDataset(torch.from_numpy(val_sentences), torch.from_numpy(val_labels))
 test_data = TensorDataset(torch.from_numpy(test_sentences), torch.from_numpy(test_labels))
@@ -74,109 +77,109 @@ def softmax(l):
     return np.exp(l)/np.sum(np.exp(l)) 
 
 # For Weighted Word Embeddings 
-with open("aspect_term_list.pkl", "rb") as f:
-    aspect_term_list = pickle.load(f)
-
-with open("aspect_weights.pkl", "rb") as f:
-    aspect_weights = pickle.load(f)
-
-with open("aspect_term_mapping.pkl", "rb") as f:
-    aspect_term_mapping = pickle.load(f)
-
-with open("./ontology/" + domain + "/concepts_list_new.pkl", "rb") as f:
-    concepts_list = pickle.load(f)
-
-with open("./ontology/" + domain + "/scores_new.json", "r") as f:
+with open("./ontology/" + domain + "/scores.json", "r") as f:
     scores = json.load(f)
 
 word2idx = pickle.load(open(f'dataset/' + domain + '/word2idx.pkl', 'rb'))
 idx2word = pickle.load(open(f'dataset/' + domain + '/idx2word.pkl', 'rb'))
-cn_words = pickle.load(open(f'./cn_nb.300_words.pkl', 'rb'))
-cn_word2idx = pickle.load(open(f'./cn_nb.300_idx.pkl', 'rb'))
-cn_embs = pickle.load(open(f'./cn_nb.300_embs.pkl', 'rb'))
+cn_words = pickle.load(open(f'embeddings/cn_nb.300_words.pkl', 'rb'))
+cn_word2idx = pickle.load(open(f'embeddings/cn_nb.300_idx.pkl', 'rb'))
+cn_embs = pickle.load(open(f'embeddings/cn_nb.300_embs.pkl', 'rb'))
 
 # Bidirectional recurrent neural network (many-to-one)
-class BiRNN(nn.Module):
+class AttnBiLSTM(nn.Module):
 
     def __init__(self, vocab_size, target_vocab, output_size, embedding_dim, hidden_dim, n_layers, drop_prob=0.5):
-        super(BiRNN, self).__init__()
+        super(AttnBiLSTM, self).__init__()
         self.hidden_size = hidden_dim
         self.num_layers = n_layers
         self.dropout = nn.Dropout(drop_prob)
 
-        scores_matrix = torch.ones((vocab_size, 1))
-        weights_matrix = torch.ones((vocab_size, embedding_dim))
-        for v in target_vocab:
-            try:
-                if v in ['_PAD','_UNK']:
-                    weights_matrix[word2idx[v]] = torch.from_numpy(cn_embs[0])
-                else:
-                    weights_matrix[word2idx[v]] = torch.from_numpy(cn_embs[cn_word2idx[v]])
-            except:
-                pass
+        # scores_matrix = torch.ones((vocab_size, 1))
+        # weights_matrix = torch.ones((vocab_size, embedding_dim))
+        # for v in target_vocab:
+        #     ''' initialize weights_matrix with conceptnet embeddings '''
+        #     try:
+        #         if v in ['_PAD','_UNK']:
+        #             weights_matrix[word2idx[v]] = torch.from_numpy(cn_embs[0])
+        #         else:
+        #             weights_matrix[word2idx[v]] = torch.from_numpy(cn_embs[cn_word2idx[v]])
+        #     except:
+        #         pass
             # if v in scores.keys():
-                # scores_matrix[word2idx[v], 0] = 2
-                # scores_matrix[word2idx[v], 0] = np.random.random()*10
-                # scores_matrix[word2idx[v], 0] = scores[v]
-        # weights_matrix = torch.from_numpy(weights_matrix).double()
-        # print(scores_matrix)
-        # print(weights_matrix)
+            #     scores_matrix[word2idx[v], 0] = scores[v]
+
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.embedding.weight = torch.nn.Parameter(weights_matrix)
-        self.embedding.weight.requires_grad = False
-        self.aspect_scores = nn.Embedding(vocab_size, 1)
-        self.aspect_scores.weight = torch.nn.Parameter(scores_matrix)
+        # self.embedding.weight = torch.nn.Parameter(weights_matrix)
+        # self.embedding.weight.requires_grad = False
+        # self.aspect_scores = nn.Embedding(vocab_size, 1)
+        # self.aspect_scores.weight = torch.nn.Parameter(scores_matrix)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
-        self.lstm2 = nn.LSTM(hidden_dim*2, hidden_dim, n_layers, dropout=drop_prob, batch_first=True, bidirectional=True)
         self.fc = nn.Linear(hidden_dim*2, output_size)                                # 2 for bidirection, when dropout
-        # self.fc = nn.Linear(hidden_dim, output_size)                                    # no dropout
         self.sigmoid = nn.Sigmoid()
+        # self.label = nn.Linear(hidden_dim*2, output_size)
+
+
+    def attention_net(self, embeds, weights):
+        '''
+		Now we will incorporate Attention mechanism in our BiLSTM model. In this new model, we will use attention 
+        to compute soft alignment score corresponding between each of the hidden_state and the last hidden_state 
+        of the LSTM. We will be using torch.bmm for the batch matrix multiplication.
+		
+		Arguments
+		---------
+		
+		lstm_output : Final output of the LSTM which contains hidden layer outputs for each sequence.
+		final_state : Final time-step hidden state (h_n) of the LSTM
+		
+		---------
+		
+		Returns : It performs attention mechanism by first computing weights for each of the sequence present in lstm_output and and then finally computing the
+				  new hidden state.
+				  
+		Tensor Size :
+					hidden.size() = (batch_size, hidden_size)
+					attn_weights.size() = (batch_size, num_seq)
+					soft_attn_weights.size() = (batch_size, num_seq)
+					new_hidden_state.size() = (batch_size, hidden_size)
+					  
+		'''
+        # hidden = hidden.squeeze(0)
+        # attn_weights = torch.bmm(embeds, hidden.unsqueeze(2)).squeeze(2)
+        # soft_attn_weights = F.softmax(attn_weights)
+        # return new_embeds
+
+        weights = weights.squeeze(0)
+        attn_weights = torch.bmm(embeds, weights.unsqueeze(2))
+        soft_attn_weights = F.softmax(attn_weights).repeat(1, 1, embedding_dim)
+        new_embeds = embeds*soft_attn_weights
+        return new_embeds
+
 
     def forward(self, x, hidden):                                                       # x.shape =  torch.Size([10, 200]) (batch_size, seq_length)
         embeds = self.embedding(x)                                                      # embeds.shape =  torch.Size([10, 200, 100])
-        # sentences = []
-        # for sen in x:
-        #     sen = sen.cpu().numpy()
-        #     sentence = ""
-        #     for w in sen:
-        #         if(w != 0):
-        #             sentence = sentence + idx2word[w] + " "
-        #     sentences.append(sentence)
-        # result = bert_embedding(sentences)
-        # embeds = result.to(device)
+        # hidden = torch.ones(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # h0.shape =  torch.Size([2, 10, 512]) : 2 for bidirection
+        weights = torch.ones(1, batch_size, embedding_dim).to(device)                      # weights.shape = torch.Size([1, 10, 300])
 
-        # Multiplying the embeddings with the aspect scores from the aspect score layer
-        scores_matrix = self.aspect_scores(x)                                           # scores_matrix.shape =  torch.Size([10, 200, 1])
-        scores_matrix1 = scores_matrix.repeat(1, 1, embedding_dim)                      # scores_matrix1.shape =  torch.Size([10, 200, emb_dim])
-        embeds = embeds*scores_matrix1
-        
-        # Set initial states
+        ''' attention mechanism '''
+        embeds = self.attention_net(embeds, weights)
+
+        ''' Set initial states '''
         h0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # h0.shape =  torch.Size([2, 10, 512]) : 2 for bidirection
         c0 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # c0.shape =  torch.Size([2, 10, 512])
 
-        h1 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # same as h0 
-        c1 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # same as c0
+        # h1 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # same as h0 
+        # c1 = torch.zeros(self.num_layers*2, x.size(0), self.hidden_size).to(device)     # same as c0
 
-        # Forward propagate the weighted/unweighted embeddings to Bi-LSTM
+        ''' Forward propagate the weighted/unweighted embeddings to Bi-LSTM '''
         lstm_out, (hidden, cell) = self.lstm(embeds, (h0, c0))                          # lstm_out.shape =  torch.Size([10, 200, 1024]) (batch_size, seq_length, hidden_size*2) | hidden.shape =  torch.Size([2, 10, 512]) | cell.shape =  torch.Size([2, 10, 512])
+        
+        hidden = torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1)                   # after dropout: hidden.shape =  torch.Size([10, 1024])
 
-        '''
-        # Multiplying the lstm outputs with the aspect scores from the aspect score layer
-        # scores_matrix = self.aspect_scores(x)                                           # scores_matrix.shape =  torch.Size([10, 200, 1])
-        # scores_matrix1 = scores_matrix.repeat(1, 1, hidden_dim*2)                       # scores_matrix1.shape =  torch.Size([10, 200, emb_dim])
-        # lstm_out = lstm_out*scores_matrix1
-        '''
-        # lstm_out, (hidden, cell) = self.lstm2(lstm_out, (h1, c1))                       # lstm_out: tensor of shape (batch_size, seq_length, hidden_size*2)
-        
-        hidden = self.dropout(torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1))       # after dropout: hidden.shape =  torch.Size([10, 1024])
-    
-        # Decode the hidden state of the last time step
-        # fc_out = self.fc(hidden[-2,:,:])                                              # without dropout - lstm_out.shape = ([10, 1])
-        fc_out = self.fc(hidden)                                                        # when dropout - lstm_out.shape = ([10, 1])
-        
+        fc_out = self.fc(hidden)
         out = self.sigmoid(fc_out)
         return out
-    
+
     def init_hidden(self, batch_size):
         weight = next(self.parameters()).data
         hidden = (weight.new(self.num_layers, batch_size, self.hidden_size).zero_().to(device), weight.new(self.num_layers, batch_size, self.hidden_size).zero_().to(device))
@@ -184,13 +187,14 @@ class BiRNN(nn.Module):
 
 vocab_size = len(word2idx) + 1
 output_size = 1
+seq_length = 300
 embedding_dim = 300
 hidden_dim = 512
 n_layers = 1
 
 target_vocab = word2idx.keys()
 
-model = BiRNN(vocab_size, target_vocab, output_size, embedding_dim, hidden_dim, n_layers).to(device)
+model = AttnBiLSTM(vocab_size, target_vocab, output_size, embedding_dim, hidden_dim, n_layers).to(device)
 
 lr=0.005
 criterion = nn.BCELoss().to(device)
@@ -203,7 +207,7 @@ clip = 5
 valid_loss_min = np.Inf
 train_loss_min = np.Inf
 
-initial_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()                  # model.aspect_scores before training
+# initial_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()                  # model.aspect_scores before training
 
 print("Start training..")
 model.train()
@@ -218,6 +222,8 @@ for i in range(epochs):
         labels = labels.unsqueeze(1)
         model.zero_grad()
         output = model(inputs, h)
+        # print("output")
+        # print(output)
         loss = criterion(output, labels.float())
         loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -241,23 +247,23 @@ for i in range(epochs):
                   "Loss: {:.6f}...".format(loss.item()),
                   "Val Loss: {:.6f}".format(np.mean(val_losses)))
             if np.mean(val_losses) < valid_loss_min:
-                torch.save(model.state_dict(), 'models/' + domain + '/state_dropout_one_layer' + weighted + '_' + dataamount + '_' + str(seed) + '.pt')
+                torch.save(model.state_dict(), 'models/' + domain + '/e_attention_' + weighted + '_' + dataamount + '_' + str(seed) + '.pt')
                 print('Validation loss decreased ({:.6f} --> {:.6f}).  Saving model ...'.format(valid_loss_min,np.mean(val_losses)))
                 valid_loss_min = np.mean(val_losses)
 
-final_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()                   # model.aspect_scores after training
-diff_weights = torch.abs(initial_weights - final_weights)
+# final_weights = model.aspect_scores.weight.squeeze(1).detach().cpu()                   # model.aspect_scores after training
+# diff_weights = torch.abs(initial_weights - final_weights)
 
-f = open('logs/' + domain + '/onto_dropout_one_layer' + str(seed) + '_' + weighted + '_' + dataamount + '.csv', 'w+')
-f.write('term,initial,trained,diff')
-for v in target_vocab:
-    if v in scores.keys():
-        word_i = word2idx[v]
-        f.write('\n' + v + ',' + str(initial_weights[word_i].numpy()) + ',' + str(final_weights[word_i].numpy()) + ',' + str(diff_weights[word_i].numpy()))
-f.close()
+# f = open('logs/' + domain + '/attention_' + str(seed) + '_' + weighted + '_' + dataamount + '.csv', 'w+')
+# f.write('term,initial,trained,diff')
+# for v in target_vocab:
+#     if v in scores.keys():
+#         word_i = word2idx[v]
+#         f.write('\n' + v + ',' + str(initial_weights[word_i].numpy()) + ',' + str(final_weights[word_i].numpy()) + ',' + str(diff_weights[word_i].numpy()))
+# f.close()
 
 # Loading the best model
-model.load_state_dict(torch.load('models/' + domain + '/state_dropout_one_layer' + weighted + '_' + dataamount + '_' + str(seed) + '.pt'))
+model.load_state_dict(torch.load('models/' + domain + '/e_attention_' + weighted + '_' + dataamount + '_' + str(seed) + '.pt'))
 
 test_losses = []
 num_correct = 0
@@ -300,5 +306,4 @@ print("============================================")
 print("Test loss: {:.3f}".format(np.mean(test_losses)))
 test_acc = num_correct/len(test_loader.dataset)
 print("Test accuracy: {:.3f}%".format(test_acc*100))
-print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-print(weighted + " - " + sampling + " sampled - " + dataamount + " - " + str(seed))
+print(domain + " - " + sampling + " sampled - " + dataamount + " - " + str(seed))
